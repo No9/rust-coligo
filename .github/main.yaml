@@ -1,0 +1,19 @@
+on: [push]
+
+jobs:
+  coligo_job:
+    runs-on: ubuntu-latest
+    name: build and deploy coligo service
+    steps:
+    - name: build and deploy 
+      id: coligo
+      uses: no9/coligo-action@1.15.0
+      env:
+        PROJECT: 'sample-app'
+        IBMCLOUD_API_KEY: ${{ secrets.IBMCLOUD_API_KEY }}
+        REGISTRY_USERNAME: 'number9'
+        REGISTRY_API_KEY: ${{ secrets.DOCKER_API_KEY }}
+        REGISTRY: 'docker.io'
+    # Use the output from the previous step
+    - name: Get the output time
+      run: echo "The time was ${{ steps.coligo.outputs.time }}"

@@ -1,0 +1,3 @@
+id: "20200610024106.90855424"
+project-name: rust-coligo
+stack: docker.io/appsody/rust-tide:0.1
