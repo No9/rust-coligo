@@ -1,19 +1,51 @@
-on: [push]
+name: Appsody-Actions CI
+
+on:
+  push:
+    branches:
+    - master
 
 jobs:
-  coligo_job:
+  build:
     runs-on: ubuntu-latest
-    name: build and deploy coligo service
+
     steps:
-    - name: build and deploy 
-      id: coligo
-      uses: no9/coligo-action@1.15.0
+    - uses: actions/checkout@v1
+    - name: build-deploy
       env:
-        PROJECT: 'sample-app'
+        CODE_ENG_PROJECT: 'sample-project'
         IBMCLOUD_API_KEY: ${{ secrets.IBMCLOUD_API_KEY }}
+        IBM_CLOUD_RESOURCE_GROUP: 'default'
+        REGISTRY: 'docker.io'
         REGISTRY_USERNAME: 'number9'
         REGISTRY_API_KEY: ${{ secrets.DOCKER_API_KEY }}
-        REGISTRY: 'docker.io'
-    # Use the output from the previous step
-    - name: Get the output time
-      run: echo "The time was ${{ steps.coligo.outputs.time }}"
+      run: |
+        echo 'Docker Login...'
+        echo $REGISTRY_API_KEY | docker login $REGISTRY --username $REGISTRY_USERNAME --password-stdin
+        REPO_NAME=$(echo ${GITHUB_REPOSITORY} | cut -d/ -f2-)
+        IMAGE_NAME=${REGISTRY_USERNAME}/${REPO_NAME}:${GITHUB_SHA}
+        echo 'Installing Appsody...'
+        wget https://github.com/appsody/appsody/releases/download/0.6.4/appsody_0.6.4_amd64.deb
+        sudo apt install -f ./appsody_0.6.4_amd64.deb
+        echo 'Running Appsody build and pushing to docker registry...'
+        appsody build --tag $IMAGE_NAME --push
+        IBMCLOUD_VERSION_CHECK=false
+        curl -L https://storage.googleapis.com/knative-nightly/client/latest/kn-linux-amd64 > kn
+        chmod +x kn
+        export CUR_DIR=$(pwd)
+        export PATH=$PATH:$CUR_DIR
+        curl -fsSL https://clis.cloud.ibm.com/download/bluemix-cli/1.1.0/linux64 > ibmcloud.tar.gz
+        tar xvzf ibmcloud.tar.gz
+        ./Bluemix_CLI/install
+        ibmcloud plugin install container-registry      
+        ibmcloud plugin install kubernetes-service
+        ibmcloud plugin install coligo
+        ibmcloud login -r us-south
+        ibmcloud target -g $IBM_CLOUD_RESOURCE_GROUP
+        ibmcloud coligo target --name $CODE_ENG_PROJECT
+        export APP_EXISTS=$(ibmcloud coligo app list | grep ${REPO_NAME}  | wc -l)
+        if [ _$APP_EXISTS == "_1" ]; then
+            ibmcloud coligo application update --name ${REPO_NAME} --image ${IMAGE_NAME}
+        else
+            ibmcloud coligo application create --name ${REPO_NAME} --image ${IMAGE_NAME}
+        fi
